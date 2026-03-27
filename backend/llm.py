@@ -1,10 +1,24 @@
 from groq import Groq
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+api_key = os.getenv("GROQ_API_KEY")
+
+# 🔥 Fallback to Streamlit secrets
+if not api_key:
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("GROQ_API_KEY")
+    except:
+        pass
+
+# 🚨 Safety check
+if not api_key:
+    raise ValueError("GROQ_API_KEY not found in environment or Streamlit secrets")
+
+# ✅ Initialize client
+client = Groq(api_key=api_key)
+
 
 SYSTEM_PROMPT = """
 You are an expert SQL generator for SQLite.
