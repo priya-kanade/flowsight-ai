@@ -15,8 +15,12 @@ def build_graph(highlight=None):
     """).fetchall()
 
     for so, customer in so_rows:
+        so = str(so)
+        customer = str(customer)
+
         nodes[so] = {"id": so, "type": "sales_order"}
         nodes[customer] = {"id": customer, "type": "customer"}
+
         edges.append({"source": customer, "target": so})
 
     # ---------- DELIVERY ----------
@@ -27,8 +31,12 @@ def build_graph(highlight=None):
     """).fetchall()
 
     for delivery, so in delivery_rows:
+        delivery = str(delivery)
+        so = str(so)
+
         nodes[delivery] = {"id": delivery, "type": "delivery"}
         nodes[so] = {"id": so, "type": "sales_order"}
+
         edges.append({"source": so, "target": delivery})
 
     # ---------- BILLING ----------
@@ -39,9 +47,14 @@ def build_graph(highlight=None):
     """).fetchall()
 
     for bill, delivery, product in billing_rows:
+        bill = str(bill)
+        delivery = str(delivery)
+        product = str(product)
+
         nodes[bill] = {"id": bill, "type": "billing"}
         nodes[delivery] = {"id": delivery, "type": "delivery"}
         nodes[product] = {"id": product, "type": "product"}
+
         edges.append({"source": delivery, "target": bill})
         edges.append({"source": bill, "target": product})
 
@@ -53,6 +66,7 @@ def build_graph(highlight=None):
     """).fetchall()
 
     for (acc,) in payment_rows:
+        acc = str(acc)
         nodes[acc] = {"id": acc, "type": "payment"}
 
     conn.close()
@@ -61,7 +75,9 @@ def build_graph(highlight=None):
     node_list = []
 
     for n in nodes.values():
-        if highlight and str(n["id"]) == str(highlight):
+        node_id = str(n["id"])
+
+        if highlight and node_id == str(highlight):
             color = "green"
         elif n["type"] == "sales_order":
             color = "blue"
@@ -79,9 +95,13 @@ def build_graph(highlight=None):
             color = "gray"
 
         node_list.append({
-            "id": str(n["id"]),
-            "label": f"{n['type']}: {n['id']}",
+            "id": node_id,
+            "label": f"{n['type']}: {node_id}",
             "color": color
         })
+
+    # 🔥 DEBUG (can remove later)
+    print("Nodes:", len(node_list))
+    print("Edges:", len(edges))
 
     return {"nodes": node_list, "edges": edges}
