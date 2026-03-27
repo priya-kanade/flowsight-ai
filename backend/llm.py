@@ -17,7 +17,9 @@ if not api_key:
     raise ValueError("GROQ_API_KEY not found in environment or Streamlit secrets")
 
 # ✅ Initialize client
-client = Groq(api_key=api_key)
+client = Groq(
+    api_key=api_key
+    )
 
 
 # ---------- SYSTEM PROMPT ----------
