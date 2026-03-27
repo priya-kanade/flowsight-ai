@@ -1,7 +1,7 @@
 from groq import Groq
 import os
 
-
+# ---------- API KEY HANDLING ----------
 api_key = os.getenv("GROQ_API_KEY")
 
 # 🔥 Fallback to Streamlit secrets
@@ -9,8 +9,8 @@ if not api_key:
     try:
         import streamlit as st
         api_key = st.secrets.get("GROQ_API_KEY")
-    except:
-        pass
+    except Exception:
+        api_key = None
 
 # 🚨 Safety check
 if not api_key:
@@ -20,6 +20,7 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 
+# ---------- SYSTEM PROMPT ----------
 SYSTEM_PROMPT = """
 You are an expert SQL generator for SQLite.
 
@@ -42,6 +43,7 @@ billing_items(billing_id, product_id, delivery_id, amount)
 delivery_items(delivery_id, sales_order_id)
 
 payments(accounting_id, amount)
+
 ---
 
 Examples:
@@ -74,6 +76,8 @@ Rules:
 Question: {question}
 """
 
+
+# ---------- GENERATE SQL ----------
 def generate_sql(user_query):
     try:
         response = client.chat.completions.create(
@@ -89,9 +93,12 @@ def generate_sql(user_query):
 
     except Exception as e:
         return f"ERROR: {str(e)}"
-    
+
+
+# ---------- GENERATE ANSWER ----------
 def generate_answer(question, result):
-    prompt = f"""
+    try:
+        prompt = f"""
 You are a senior business analyst AI.
 
 Your job is to explain data insights in a human, conversational way.
@@ -109,9 +116,13 @@ Data: {result}
 Answer:
 """
 
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-    )
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
 
-    return response.choices[0].message.content.strip()
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        return f"Error generating answer: {str(e)}"
