@@ -1,59 +1,34 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
-from functools import lru_cache
 import time
 
 from backend.graph import build_graph
 from backend.llm import generate_sql, generate_answer
 from backend.utils import extract_id
 
-app = FastAPI()
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Simple cache for graph (expires every 2 minutes)
+# ---------- SIMPLE CACHE ----------
 _graph_cache = {"data": None, "timestamp": 0}
 _CACHE_TTL = 120  # 2 minutes
+
 
 def get_cached_graph(highlight=None):
     global _graph_cache
     current_time = time.time()
-    
-    # Return cached graph if still valid and highlight matches
-    if (current_time - _graph_cache["timestamp"] < _CACHE_TTL and 
-        _graph_cache["data"] is not None and 
-        highlight is None):
+
+    if (
+        current_time - _graph_cache["timestamp"] < _CACHE_TTL
+        and _graph_cache["data"] is not None
+        and highlight is None
+    ):
         return _graph_cache["data"]
-    
-    # Rebuild graph
+
     graph = build_graph(highlight)
-    
-    # Cache it if no highlight
+
     if highlight is None:
         _graph_cache["data"] = graph
         _graph_cache["timestamp"] = current_time
-    
+
     return graph
-
-
-# ---------- ROOT ----------
-@app.get("/")
-def root():
-    return {"message": "FlowSight AI Backend Running"}
-
-
-# ---------- GRAPH ----------
-@app.get("/graph")
-def graph(highlight: str = None):
-    return get_cached_graph(highlight)
 
 
 # ---------- TRACE FLOW ----------
@@ -63,7 +38,7 @@ def trace_billing_flow(billing_id):
 
     result = cursor.execute("""
         SELECT 
-            COALESCE(di.sales_order_id, 'Not Linked') as sales_order_id,
+            COALESCE(di.sales_order_id, 'Not Linked'),
             bi.delivery_id,
             bi.billing_id
         FROM billing_items bi
@@ -72,12 +47,11 @@ def trace_billing_flow(billing_id):
         WHERE bi.billing_id = ?
     """, (billing_id,)).fetchall()
 
+    conn.close()
     return result
 
 
-# ---------- ASK ----------
-
-@app.get("/ask")
+# ---------- ASK FUNCTION (MAIN ENTRY) ----------
 def ask(question: str):
 
     question_lower = question.lower()
@@ -113,6 +87,8 @@ def ask(question: str):
             ON bi.delivery_id = di.delivery_id
             WHERE bi.billing_id = ?
         """, (billing_id,)).fetchall()
+
+        conn.close()
 
         if flow:
             so, delivery, billing = flow[0]
@@ -151,6 +127,8 @@ def ask(question: str):
             LIMIT 10
         """).fetchall()
 
+        conn.close()
+
         return {
             "answer": f"Found {len(result)} sales orders with incomplete flow."
         }
@@ -164,9 +142,12 @@ def ask(question: str):
     try:
         result = cursor.execute(sql).fetchall()
     except Exception as e:
+        conn.close()
         return {
             "answer": f"Query failed: {str(e)}"
         }
+
+    conn.close()
 
     # ---------- GENERATE ANSWER ----------
     answer = generate_answer(question, result)
@@ -179,12 +160,12 @@ def ask(question: str):
         "highlight": highlight
     }
 
-@app.get("/node/{node_id}")
+
+# ---------- OPTIONAL NODE DETAILS ----------
 def get_node(node_id: str):
     conn = sqlite3.connect("business.db")
     cursor = conn.cursor()
 
-    # Single optimized query using UNION - checks all tables at once
     row = cursor.execute("""
         SELECT 'Billing', billing_id, delivery_id, product_id, amount FROM billing_items WHERE billing_id = ?
         UNION ALL
